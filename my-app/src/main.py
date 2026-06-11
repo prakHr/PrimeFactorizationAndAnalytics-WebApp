@@ -205,37 +205,38 @@ class TodoApp(ft.Column):
 
 @ft.control
 class AnalyticsPage(ft.Column):
-
     def create_shimmer(self):
-        print("Creating shimmer effect...")
         accent = ft.LinearGradient(
             begin=ft.Alignment(-1.0, -0.5),
             end=ft.Alignment(1.0, 0.5),
             colors=[
-                ft.Colors.BLUE,
-                ft.Colors.BLUE,
                 ft.Colors.WHITE,
                 ft.Colors.BLUE,
+                ft.Colors.WHITE,
+                ft.Colors.WHITE,
                 ft.Colors.BLUE,
             ],
             stops=[0.0, 0.35, 0.5, 0.65, 1.0],
         )
 
-        return ft.Shimmer(
-            gradient=accent,
-            direction=ft.ShimmerDirection.LTR,
-            period=1800,
-            content=ft.Container(
-                width=300,
-                height=300,
-                border_radius=150,
-                bgcolor=ft.Colors.with_opacity(
-                    0.3,
-                    ft.Colors.WHITE,
+        return ft.Container(
+            expand=True,
+            alignment=ft.Alignment(0, 0),
+            content=ft.Shimmer(
+                gradient=accent,
+                direction=ft.ShimmerDirection.LTR,
+                period=1800,
+                content=ft.Container(
+                    width=300,
+                    height=300,
+                    border_radius=150,
+                    bgcolor=ft.Colors.with_opacity(
+                        0.3,
+                        ft.Colors.WHITE,
+                    ),
                 ),
-            )
+            ),
         )
-
     def init(self):
 
         self.input_numbers = ft.TextField(
@@ -252,12 +253,127 @@ class AnalyticsPage(ft.Column):
                 weight=ft.FontWeight.BOLD,
             ),
             self.input_numbers,
-            ft.Button(
-                "Generate Pie Chart",
-                on_click=self.generate_chart,
+           ft.Row(
+                alignment=ft.MainAxisAlignment.CENTER,
+                controls=[
+                    ft.Button(
+                        "Generate Pie Chart",
+                        on_click=self.generate_chart,
+                    ),
+                    ft.Button(
+                        "Generate Line Chart",
+                        on_click=self.generate_line_chart,
+                    ),
+                ],
             ),
             self.chart_container,
         ]
+
+    def build_line_chart(self):
+
+        time.sleep(0.25)
+
+        try:
+
+            values = [
+                int(x.strip())
+                for x in self.input_numbers.value.split(",")
+                if x.strip()
+            ]
+
+            if not values:
+                return
+
+            points = [
+                fch.LineChartDataPoint(i, value)
+                for i, value in enumerate(values)
+            ]
+
+            data_series = [
+                fch.LineChartData(
+                    stroke_width=4,
+                    color=ft.Colors.BLUE,
+                    curved=True,
+                    rounded_stroke_cap=True,
+                    points=points,
+                )
+            ]
+
+            chart = fch.LineChart(
+                expand=True,
+                data_series=data_series,
+
+                min_x=0,
+                max_x=max(len(values) - 1, 1),
+
+                min_y=0,
+                max_y=max(values) + 5,
+
+                border=ft.Border.all(
+                    1,
+                    ft.Colors.with_opacity(
+                        0.2,
+                        ft.Colors.ON_SURFACE,
+                    ),
+                ),
+
+                horizontal_grid_lines=fch.ChartGridLines(
+                    interval=max(
+                        1,
+                        max(values) // 5,
+                    ),
+                    color=ft.Colors.with_opacity(
+                        0.2,
+                        ft.Colors.ON_SURFACE,
+                    ),
+                    width=1,
+                ),
+
+                vertical_grid_lines=fch.ChartGridLines(
+                    interval=1,
+                    color=ft.Colors.with_opacity(
+                        0.2,
+                        ft.Colors.ON_SURFACE,
+                    ),
+                    width=1,
+                ),
+
+                tooltip=fch.LineChartTooltip(
+                    bgcolor=ft.Colors.with_opacity(
+                        0.8,
+                        ft.Colors.BLUE_GREY,
+                    ),
+                ),
+
+                left_axis=fch.ChartAxis(
+                    label_size=40,
+                ),
+
+                bottom_axis=fch.ChartAxis(
+                    label_size=40,
+                    labels=[
+                        fch.ChartAxisLabel(
+                            value=i,
+                            label=ft.Text(str(i + 1)),
+                        )
+                        for i in range(len(values))
+                    ],
+                ),
+            )
+
+            self.chart_container.content = chart
+            self.update()
+
+        except Exception as ex:
+            pass
+
+    def generate_line_chart(self, e):
+
+        self.chart_container.content = self.create_shimmer()
+
+        self.update()
+
+        self.page.run_thread(self.build_line_chart)
 
     def generate_chart(self, e):
 
@@ -267,7 +383,7 @@ class AnalyticsPage(ft.Column):
         self.page.run_thread(self.build_chart)
 
     def build_chart(self):
-        time.sleep(2)  # Simulate data processing delay
+        time.sleep(0.25)  # Simulate data processing delay
         try:
             values = [
                 int(x.strip())
@@ -307,7 +423,7 @@ class AnalyticsPage(ft.Column):
             self.update()
 
         except Exception as ex:
-            print(ex)
+            pass
 
 
 
@@ -337,7 +453,7 @@ class MultiPageApp(ft.Column):
             destinations=[
                 ft.NavigationBarDestination(
                     icon=ft.Icons.CHECKLIST,
-                    label="Todo",
+                    label="ToCalcPrimeFactors",
                 ),
                 ft.NavigationBarDestination(
                     icon=ft.Icons.ANALYTICS,
@@ -379,11 +495,9 @@ class MultiPageApp(ft.Column):
         self.update()
 
 def main(page: ft.Page):
-    page.title = "Integer Prime Factorization Shor Algorithm App"
+    page.title = "modernWebApp"
     page.theme_mode = ft.ThemeMode.LIGHT
-
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-
     page.add(MultiPageApp())
 
 
