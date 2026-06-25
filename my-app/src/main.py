@@ -1,12 +1,252 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 from dataclasses import field
 from typing import Callable
+import asyncio
 
 import flet as ft
 import runShorAlgoForEvenNo as r
 from collections import Counter
 import flet_charts as fch
-
+from pprint import pprint
 import time
+import requests
+from ddgs import DDGS
+
+import pandas as pd
+import imagefeatures
+from imagefeatures.process import process
+from wordhoard import Synonyms
+
+import languagemodels as lm
+import time
+
+@ft.control
+class WikiPage(ft.Column):
+
+    def init(self):
+
+        self.search_field = ft.TextField(
+            label="Search",
+            hint_text="Enter a topic...",
+            prefix_icon=ft.Icons.SEARCH,
+            expand=True,
+        )
+
+        self.progress_ring = ft.ProgressRing(
+            visible=False,
+            width=20,
+            height=20,
+        )
+
+        self.search_button = ft.ElevatedButton(
+            "SEARCH",
+            icon=ft.Icons.SEARCH,
+            on_click=self.start_search,
+        )
+
+        self.result_container = ft.Column(
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
+
+        
+        self.controls = [
+            ft.Row(
+                controls=[
+                    self.search_field,
+                    self.search_button,
+                    self.progress_ring,
+                ]
+            ),
+            self.result_container,
+        ]
+
+    def start_search(self, e):
+
+        query = self.search_field.value.strip()
+
+        if not query:
+            return
+
+        self.search_button.disabled = True
+        self.progress_ring.visible = True
+
+        self.result_container.controls.clear()
+
+        self.update()
+
+        self.page.run_task(self.search_wiki_async, query)
+
+    async def search_wiki_async(self, query):
+
+        try:
+
+            image_url = (
+                f"https://image.pollinations.ai/prompt/{query.replace(' ', ',')}"
+            )
+
+            wiki_text = await asyncio.to_thread(
+                lambda: lm.get_wiki(query.replace(" ", ","))
+            )
+
+            card = ft.Card(
+                elevation=10,
+                content=ft.Container(
+                    padding=0,
+                    content=ft.Column(
+                        spacing=0,
+                        controls=[
+                            ft.Container(
+                                height=300,
+                                content=ft.Column(
+                                    scroll=ft.ScrollMode.AUTO,
+                                    controls=[
+                                        ft.Text(
+                                            wiki_text,
+                                            selectable=True,
+                                        )
+                                    ],
+                                ),
+                            ),
+                            ft.Row(
+                                alignment=ft.MainAxisAlignment.CENTER,
+                                controls=[
+                                    ft.Image(
+                                        src=image_url,
+                                        height=100,
+                                    )
+                                ],
+                            ),
+                        ],
+                    ),
+                ),
+            )
+
+            self.result_container.controls.append(card)
+
+        except Exception as ex:
+
+            self.result_container.controls.append(
+                ft.Text(f"Error: {ex}")
+            )
+
+        finally:
+
+            self.progress_ring.visible = False
+            self.search_button.disabled = False
+
+            self.update()
+
+@ft.control
+class TranslatorPage(ft.Column):
+
+    
+    def init(self):
+
+        self.search_field = ft.TextField(
+            label="Search",
+            hint_text="Enter a topic...",
+            prefix_icon=ft.Icons.SEARCH,
+            expand=True,
+        )
+
+        self.result_container = ft.Column(
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
+
+        self.search_button = ft.ElevatedButton(
+            "TRANSLATE",
+            icon=ft.Icons.TRANSCRIBE_ROUNDED,
+            on_click=self.start_translate,
+        )
+
+        self.progress_ring = ft.ProgressRing(
+            visible=False,
+            width=20,
+            height=20,
+        )
+
+        self.controls = [
+            ft.Row(
+                controls=[
+                    self.search_field,
+                    self.search_button,
+                    self.progress_ring,
+                ]
+            ),
+            self.result_container,
+        ]
+
+    def start_translate(self, e):
+
+        query = self.search_field.value.strip()
+
+        if not query:
+            return
+
+        self.search_button.disabled = True
+        self.progress_ring.visible = True
+
+        self.result_container.controls.clear()
+
+        self.update()
+
+        self.page.run_task(
+            self.translate_async,
+            query,
+        )
+
+    async def translate_async(self, query):
+
+        try:
+
+            translator_text = await asyncio.to_thread(
+                lambda: lm.do(
+                    f"Translate to English: {query}"
+                )
+            )
+
+            card = ft.Card(
+                elevation=10,
+                content=ft.Container(
+                    padding=0,
+                    content=ft.Column(
+                        controls=[
+                            ft.Container(
+                                height=100,
+                                width=300,
+                                content=ft.Column(
+                                    scroll=ft.ScrollMode.AUTO,
+                                    controls=[
+                                        ft.Text(
+                                            translator_text,
+                                            selectable=True,
+                                        )
+                                    ],
+                                ),
+                            )
+                        ],
+                    ),
+                ),
+            )
+
+            self.result_container.controls.append(card)
+
+        except Exception as ex:
+
+            self.result_container.controls.append(
+                ft.Text(f"Error: {ex}")
+            )
+
+        finally:
+
+            self.progress_ring.visible = False
+            self.search_button.disabled = False
+
+            self.update()
 
 @ft.control
 class Task(ft.Column):
@@ -174,7 +414,7 @@ class TodoApp(ft.Column):
             else:
                 factors = r.parallel_for_loop_factor(number)
                 result = f"Prime Factorization for {number}: {factors}"
-
+                
             task.display_task.label = result
 
         except Exception as ex:
@@ -427,6 +667,389 @@ class AnalyticsPage(ft.Column):
 
 
 
+
+
+@ft.control
+class GalleryPage(ft.Column):
+
+    def init(self):
+        self.session = requests.Session()
+
+        self.expand = True
+        self.spacing = 10
+
+        self.feature_cache = {}
+
+        self.search_field = ft.TextField(
+            hint_text="Search images...",
+            expand=True,
+            on_submit=self.search_images,
+        )
+
+        self.search_button = ft.Button(
+            "Search",
+            on_click=self.search_images,
+        )
+
+        self.status_text = ft.Text("")
+
+        # Horizontal scrolling gallery
+        self.gallery = ft.Row(
+            expand=True,
+            wrap=False,
+            scroll=ft.ScrollMode.ALWAYS,
+            spacing=10,
+        )
+
+        self.feature_text = ft.Text(
+            "Click on an image to generate features",
+            selectable=True,
+        )
+
+        self.embedding_chart = fch.LineChart(data_series=[], expand=True, height=300)
+
+        self.feature_panel = ft.Container(
+            padding=15,
+            border_radius=10,
+            content=ft.Column(
+                [
+                    ft.Text(
+                        "Image Features",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    self.feature_text,
+                    self.embedding_chart,
+                ],
+                scroll=ft.ScrollMode.AUTO,
+            ),
+        )
+
+        self.controls = [
+            ft.Row(
+                [
+                    self.search_field,
+                    self.search_button,
+                ]
+            ),
+            self.status_text,
+            ft.Container(
+                height=220,
+                content=self.gallery,
+            ),
+            self.feature_panel,
+        ]
+
+
+    def update_embedding_chart(self, result_dict):
+
+        embedding_cols = sorted(
+            [
+                c
+                for c in result_dict.keys()
+                if c.startswith("image_url_embedding_")
+            ],
+            key=lambda x: int(x.split("_")[-1])
+        )
+
+        values = [
+            float(result_dict[c])
+            for c in embedding_cols
+        ]
+
+        points = [
+            fch.LineChartDataPoint(i, value)
+            for i, value in enumerate(values)
+        ]
+
+        self.embedding_chart.data_series = [
+            fch.LineChartData(
+                points=points,
+                curved=True,
+                stroke_width=2,
+            )
+        ]
+
+    def search_images(self, e):
+        query = self.search_field.value.strip()
+
+        if not query:
+            self.status_text.value = "Please enter a search query."
+            self.update()
+            return
+
+        self.status_text.value = f"Searching for '{query}'..."
+        self.gallery.controls.clear()
+        self.update()
+
+        try:
+            with DDGS() as ddgs:
+                results = list(
+                    ddgs.images(
+                        query=query,
+                        max_results=30,
+                    )
+                )
+
+            if not results:
+                self.status_text.value = "No images found."
+                self.update()
+                return
+
+            for item in results:
+
+                image_url = item.get("image")
+
+                if not image_url:
+                    continue
+
+                self.gallery.controls.append(
+                    ft.Container(
+                        width=200,
+                        height=200,
+                        border_radius=10,
+                        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+                        content=ft.Image(
+                            src=image_url,
+                            width=200,
+                            height=200,
+                            fit=ft.BoxFit.COVER,
+                            border_radius=ft.BorderRadius.all(10),
+                        ),
+                        on_click=lambda e, url=image_url: self.show_features(
+                            e, url
+                        ),
+                    )
+                )
+
+            self.status_text.value = (
+                f"Found {len(self.gallery.controls)} images."
+            )
+
+        except Exception as ex:
+            self.status_text.value = f"Search Error: {ex}"
+
+        self.update()
+
+    def show_features(self, e, image_url):
+
+        if e.data == "false":
+            return
+
+        try:
+
+            if image_url in self.feature_cache:
+                self.feature_text.value = self.feature_cache[image_url]
+                self.update()
+                return
+
+            self.feature_text.value = "Generating features..."
+            self.update()
+
+            df = pd.DataFrame(
+                {
+                    "image_url": [image_url]
+                }
+            )
+
+            result = process(
+                df,
+                {"image_url"},
+                self.session,
+            )
+
+            result_dict = (
+                result.copy()
+                .to_dict(orient="records")[0]
+            )
+
+            self.update_embedding_chart(result_dict)
+            features = []
+
+            for feat in [
+                "image_url_average_blue",
+                "image_url_average_green",
+                "image_url_average_red",
+                "image_url_luminosity",
+            ]:
+
+                if feat in result_dict:
+                    features.append(
+                        f"{feat[10:].replace('_', '-').upper()}: {result_dict[feat]}"
+                    )
+
+            features_text = " <=> ".join(features)
+
+            self.feature_cache[image_url] = features_text
+
+            self.feature_text.value = features_text
+
+        except Exception as ex:
+            self.feature_text.value = (
+                f"Feature Extraction Error:\n{ex}"
+            )
+
+        self.update()
+
+
+
+@ft.control
+class SynonymPage(ft.Column):
+
+    def init(self):
+        self.search_field = ft.TextField(
+            hint_text="Search for synonyms...",
+            expand=True,
+            on_submit=self.start_search,
+        )
+
+        self.search_button = ft.ElevatedButton(
+            "Search",
+            on_click=self.start_search,
+        )
+
+        self.progress_ring = ft.ProgressRing(
+            visible=False,
+            width=20,
+            height=20,
+        )
+
+        self.status_text = ft.Text()
+
+        self.tasks = ft.Column(
+            wrap=True,
+            scroll=ft.ScrollMode.ALWAYS,
+            expand=True,
+        )
+
+        self.controls = [
+            ft.Row(
+                [
+                    self.search_field,
+                    self.search_button,
+                    self.progress_ring,
+                ]
+            ),
+            self.status_text,
+            ft.Container(
+                height=220,
+                content=self.tasks,
+            ),
+        ]
+
+    def start_search(self, e):
+        """
+        Called immediately from button click.
+        Shows progress ring and launches background task.
+        """
+
+        query = self.search_field.value.strip()
+
+        if not query:
+            self.status_text.value = "Please enter a word."
+            self.update()
+            return
+
+        if len(query.split()) > 1:
+            self.status_text.value = "Please enter a single word."
+            self.update()
+            return
+
+        self.search_button.disabled = True
+        self.progress_ring.visible = True
+        self.status_text.value = f"Searching for direction, beauty and meaning of '{query}'..."
+        self.tasks.controls.clear()
+
+        self.update()
+
+        # same pattern as Analytics/ToDo pages
+        self.page.run_task(self.search_synonyms_async, query)
+
+    async def search_synonyms_async(self, query):
+
+        try:
+
+            # move blocking work to thread
+            synonyms_results = await asyncio.to_thread(
+                lambda: Synonyms(query).find_synonyms()
+            )
+
+            synonyms = (
+                synonyms_results
+                if synonyms_results
+                else ["No synonyms found"]
+            )
+
+            controls = []
+
+            def fetch_images():
+                results = []
+
+                with DDGS() as ddgs:
+                    for word in synonyms:
+
+                        image_results = list(
+                            ddgs.images(
+                                query=word,
+                                max_results=1,
+                            )
+                        )
+
+                        image_url = ""
+
+                        if image_results:
+                            image_url = image_results[0].get("image", "")
+
+                        results.append((word, image_url))
+
+                return results
+
+            image_data = await asyncio.to_thread(fetch_images)
+
+            for word, image_url in image_data:
+
+                controls.append(
+                    ft.Container(
+                        width=200,
+                        height=200,
+                        border_radius=10,
+                        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+                        content=ft.Image(
+                            src=image_url,
+                            fit=ft.BoxFit.COVER,
+                        ),
+                    )
+                )
+
+                controls.append(
+                    ft.Container(
+                        ft.Text(f"{word}"),
+                        width=100,
+                        height=100,
+                        alignment=ft.Alignment.CENTER,
+                        bgcolor=ft.Colors.AMBER_100,
+                        border=ft.Border.all(1, ft.Colors.AMBER_400),
+                        border_radius=ft.BorderRadius.all(5),
+                    )
+                )
+
+            self.tasks.controls = controls
+
+            self.status_text.value = (
+                f"Found {len(synonyms)} synonym(s)"
+            )
+
+        except Exception as ex:
+
+            self.status_text.value = f"Error: {ex}"
+
+        finally:
+
+            self.progress_ring.visible = False
+            self.search_button.disabled = False
+
+            self.update()
+
 @ft.control
 class MultiPageApp(ft.Column):
 
@@ -443,6 +1066,10 @@ class MultiPageApp(ft.Column):
 
         self.todo_page = TodoApp()
         self.analytics_page = AnalyticsPage()
+        self.gallery_page = GalleryPage()
+        self.synonym_page = SynonymPage()
+        self.wiki_page = WikiPage()
+        self.translator_page = TranslatorPage()
 
         self.page_body = ft.Container(
             content=self.todo_page,
@@ -459,6 +1086,23 @@ class MultiPageApp(ft.Column):
                     icon=ft.Icons.ANALYTICS,
                     label="Analytics",
                 ),
+                ft.NavigationBarDestination(
+                    icon=ft.Icons.BROWSE_GALLERY_SHARP,
+                    label="ImageGallery",
+                ),
+                ft.NavigationBarDestination(
+                    icon=ft.Icons.SYNAGOGUE_ROUNDED,
+                    label="SynonymGenerator",
+                ),
+                ft.NavigationBarDestination(
+                    icon=ft.Icons.WIDGETS,
+                    label="Wiki",
+                ),
+                ft.NavigationBarDestination(
+                    icon=ft.Icons.TRANSCRIBE,
+                    label="Translator",
+                ),
+                
             ],
             on_change=self.nav_changed,
         )
@@ -489,8 +1133,21 @@ class MultiPageApp(ft.Column):
         if e.control.selected_index == 0:
             self.page_body.content = self.todo_page
 
-        else:
+        elif e.control.selected_index == 1:
             self.page_body.content = self.analytics_page
+        
+        elif e.control.selected_index == 2:
+            self.page_body.content = self.gallery_page
+        
+        elif e.control.selected_index == 3:
+            self.page_body.content = self.synonym_page
+        
+        elif e.control.selected_index == 4:
+            self.page_body.content = self.wiki_page
+
+        elif e.control.selected_index == 5:
+            self.page_body.content = self.translator_page
+
 
         self.update()
 
@@ -498,6 +1155,8 @@ def main(page: ft.Page):
     page.title = "modernWebApp"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+    page.window.width = 500
+    page.window.height = 600
     page.add(MultiPageApp())
 
 
