@@ -1,0 +1,12 @@
+ddgs==9.14.4
+flet==0.85.3
+flet-charts==0.85.3
+flet-cli==0.85.3
+flet-desktop==0.85.3
+flet-web==0.85.3
+fletura==1.0.9
+imagefeatures==0.0.1
+languagemodels==1.0.0
+pandas==3.0.3
+wordhoard==1.5.5
+mpire==2.10.2
