@@ -711,11 +711,21 @@ class GalleryPage(ft.Column):
             spacing=10,
         )
 
-        self.feature_text = ft.Text(
-            "Click on an image to generate features",
-            selectable=True,
+        self.feature_text = ft.Column(
+            controls=[
+                ft.Text(
+                    "Click on an image to generate features",
+                    selectable=True,
+                )
+            ],
+            spacing=5,
         )
-
+        self.feature_colors = {
+            "image_url_average_blue": ft.Colors.BLUE,
+            "image_url_average_green": ft.Colors.GREEN,
+            "image_url_average_red": ft.Colors.RED,
+            "image_url_luminosity": ft.Colors.AMBER,
+        }
         self.embedding_chart = fch.LineChart(data_series=[], expand=True, height=300)
 
         self.feature_panel = ft.Container(
@@ -848,14 +858,47 @@ class GalleryPage(ft.Column):
 
         try:
 
+            # ----------------------------
+            # Return cached result
+            # ----------------------------
             if image_url in self.feature_cache:
-                self.feature_text.value = self.feature_cache[image_url]
+
+                self.feature_text.controls.clear()
+
+                for feat, value in self.feature_cache[image_url].items():
+
+                    self.feature_text.controls.append(
+                        ft.Text(
+                            f"{feat[10:].replace('_', '-').upper()}: {value}",
+                            color=self.feature_colors.get(
+                                feat,
+                                ft.Colors.WHITE,
+                            ),
+                            weight=ft.FontWeight.BOLD,
+                            size=16,
+                        )
+                    )
+
                 self.update()
                 return
 
-            self.feature_text.value = "Generating features..."
+            # ----------------------------
+            # Loading message
+            # ----------------------------
+            self.feature_text.controls.clear()
+
+            self.feature_text.controls.append(
+                ft.Text(
+                    "Generating features...",
+                    italic=True,
+                )
+            )
+
             self.update()
 
+            # ----------------------------
+            # Feature Extraction
+            # ----------------------------
             df = pd.DataFrame(
                 {
                     "image_url": [image_url]
@@ -874,7 +917,10 @@ class GalleryPage(ft.Column):
             )
 
             self.update_embedding_chart(result_dict)
-            features = []
+
+            self.feature_text.controls.clear()
+
+            cache = {}
 
             for feat in [
                 "image_url_average_blue",
@@ -884,23 +930,35 @@ class GalleryPage(ft.Column):
             ]:
 
                 if feat in result_dict:
-                    features.append(
-                        f"{feat[10:].replace('_', '-').upper()}: {result_dict[feat]}"
+
+                    cache[feat] = result_dict[feat]
+
+                    self.feature_text.controls.append(
+                        ft.Text(
+                            f"{feat[10:].replace('_', '-').upper()}: {result_dict[feat]}",
+                            color=self.feature_colors.get(
+                                feat,
+                                ft.Colors.WHITE,
+                            ),
+                            weight=ft.FontWeight.BOLD,
+                            size=16,
+                        )
                     )
 
-            features_text = " <=> ".join(features)
-
-            self.feature_cache[image_url] = features_text
-
-            self.feature_text.value = features_text
+            self.feature_cache[image_url] = cache
 
         except Exception as ex:
-            self.feature_text.value = (
-                f"Feature Extraction Error:\n{ex}"
+
+            self.feature_text.controls.clear()
+
+            self.feature_text.controls.append(
+                ft.Text(
+                    f"Feature Extraction Error:\n{ex}",
+                    color=ft.Colors.RED,
+                )
             )
 
         self.update()
-
 
 
 @ft.control
@@ -989,6 +1047,14 @@ class SynonymPage(ft.Column):
                 if synonyms_results
                 else ["No synonyms found"]
             )
+
+            if synonyms==(["No synonyms found"]):
+                self.progress_ring.visible = False
+                self.search_button.disabled = False
+                self.status_text.value = f"No synonyms found for '{query}'..."
+                self.update()
+        
+                return
 
             controls = []
 
