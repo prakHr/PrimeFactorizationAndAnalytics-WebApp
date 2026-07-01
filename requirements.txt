@@ -1,3 +1,4 @@
+memorine==0.2.0
 ddgs==9.14.4
 flet==0.85.3
 flet-charts==0.85.3

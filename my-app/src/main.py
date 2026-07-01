@@ -4,6 +4,8 @@ warnings.filterwarnings("ignore")
 from dataclasses import field
 from typing import Callable
 import asyncio
+import random
+import string
 
 import flet as ft
 import runShorAlgoForEvenNo as r
@@ -22,6 +24,8 @@ from wordhoard import Synonyms
 import languagemodels as lm
 import time
 from datetime import datetime
+import agi
+from agi import create_agi, ask_agi
 
 
 
@@ -1127,6 +1131,110 @@ class SynonymPage(ft.Column):
             self.update()
 
 @ft.control
+class AGIPage(ft.Column):
+    def init(self):
+        self.input_field = ft.TextField(
+            label="Ask me anything",
+            hint_text="Type your question here...",
+            expand=True,
+        )
+
+        self.submit_button = ft.Button(
+            "Give Task to AGI",
+            on_click=self.submit_question,
+        )
+
+        self.ask_button = ft.Button(
+            "Ask Query",
+            on_click=self.ask_question,
+        )
+        
+
+        self.response_container = ft.Column(
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
+
+        self.controls = [
+            ft.Row(
+                controls=[
+                    self.input_field,
+                    self.submit_button,
+                    self.ask_button,
+                ]
+            ),
+            self.response_container,
+        ]
+
+        self.tasks = []
+
+        self.agi_name = ''.join(
+            random.choices(string.ascii_letters + string.digits, k=100)
+        )
+        
+        
+
+        
+    def submit_question(self, e):
+        question = self.input_field.value.strip()
+
+        if not question:
+            return
+
+        self.submit_button.disabled = True
+        self.ask_button.disabled = True
+        self.response_container.controls.clear()
+        self.update()
+        self.page.run_task(self.get_response_async, question)
+        self.submit_button.disabled = False
+        self.ask_button.disabled = False
+        self.input_field.value = ""
+        
+    def ask_question(self, e):
+        question = self.input_field.value.strip()
+
+        if not question:
+            return
+        self.submit_button.disabled = True
+        self.ask_button.disabled = True
+        self.response_container.controls.clear()
+        self.update()
+        self.page.run_task(self.get_ask_question_async, question)
+        self.ask_button.disabled = False
+        self.submit_button.disabled = False
+        self.input_field.value = ""
+    
+    async def get_response_async(self, question):
+        self.tasks.append(question)
+        # from pprint import pprint
+        # pprint(self.tasks)
+    
+   
+    async def get_ask_question_async(self, query):
+        agi_system = create_agi(self.tasks, self.agi_name)
+
+        response = ask_agi(agi_system, query)
+
+        # Clear previous responses
+        self.response_container.controls.clear()
+
+        # Create one container for each response
+        containers = [
+            ft.Container(
+                content=ft.Text(str(item)),
+                padding=10,
+                margin=5,
+                border_radius=10,
+                bgcolor=ft.Colors.BLUE_50,
+            )
+            for item in response
+        ]
+
+        self.response_container.controls.extend(containers)
+
+        self.update()
+
+@ft.control
 class MultiPageApp(ft.Column):
 
     def theme_changed(self, e):
@@ -1146,6 +1254,7 @@ class MultiPageApp(ft.Column):
         self.synonym_page = SynonymPage()
         self.wiki_page = WikiPage()
         self.translator_page = TranslatorPage()
+        self.agi_page = AGIPage()
 
         self.page_body = ft.Container(
             content=self.todo_page,
@@ -1178,6 +1287,10 @@ class MultiPageApp(ft.Column):
                     icon=ft.Icons.TRANSCRIBE,
                     label="Translator",
                 ),
+                ft.NavigationBarDestination(
+                    icon=ft.Icons.WIDGETS,
+                    label="AGI",
+                )
                 
             ],
             on_change=self.nav_changed,
@@ -1223,6 +1336,9 @@ class MultiPageApp(ft.Column):
 
         elif e.control.selected_index == 5:
             self.page_body.content = self.translator_page
+
+        elif e.control.selected_index == 6:
+            self.page_body.content = self.agi_page
 
 
         self.update()
